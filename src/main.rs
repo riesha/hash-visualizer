@@ -1,5 +1,6 @@
 #![feature(hasher_prefixfree_extras)]
-use std::hash::Hasher;
+#![feature(is_some_with)]
+use std::{env, fs::File, hash::Hasher, io::Read};
 
 use bitvec::{prelude::Msb0, view::BitView};
 use fnv::FnvHasher;
@@ -58,10 +59,38 @@ fn fnv1(data: &[u8]) -> Vec<u8>
 }
 fn main()
 {
-    let hash = fnv1a(PAYLOAD.as_bytes());
+    let args: Vec<String> = env::args().collect();
+    let mode = args.get(1);
+    let input = args.get(2);
+
+    if mode.is_none()
+        || (mode.is_some() && input.is_none())
+        || mode.is_some_and(|&x| x != "file" && x != "string")
+    {
+        eprintln!("Wrong arguments!\nUsage: bin file|string <filepath|inputtext>");
+        return;
+    }
+    let mode = mode.unwrap();
+    let input = input.unwrap();
+    let data = match mode.as_str()
+    {
+        "file" =>
+        {
+            let mut file = File::open(input).unwrap();
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer).unwrap();
+            buffer
+        }
+        "string" => input.to_owned().into_bytes(),
+        _ =>
+        {
+            panic!("invalid input")
+        }
+    };
+    let hash = fnv1a(&data);
     println!(
         "string entropy: {} hashed entropy: {}",
-        shannon_entropy(PAYLOAD.as_bytes()),
+        shannon_entropy(&data),
         shannon_entropy(&hash)
     );
     let bits = hash.view_bits::<Msb0>();
