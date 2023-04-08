@@ -1,77 +1,44 @@
 #![feature(hasher_prefixfree_extras)]
 #![feature(is_some_with)]
-use std::{env, fs::File, io::Read};
+#![feature(int_log)]
+use std::{env, fs::File, io::Read, ops::AddAssign};
 
+use argh::FromArgs;
 use bitvec::{prelude::Msb0, view::BitView};
 
+use hash_visualizer::{
+    hash::fnv1a,
+    hilbert::{index2xy, Coords},
+};
+
 use image::{Rgb, RgbImage};
-
-#[allow(dead_code)]
-const PAYLOAD: &str = r#"hi every1 im new!!!!!!! *holds up spork* my name is katy but u can call me t3h PeNgU1N oF d00m!!!!!!!! lol…as u can see im very random!!!! thats why i came here, 2 meet random ppl like me ^_^… im 13 years old (im mature 4 my age tho!!) i like 2 watch invader zim w/ my girlfreind (im bi if u dont like it deal w/it) its our favorite tv show!!! bcuz its SOOOO random!!!! shes random 2 of course but i want 2 meet more random ppl =) like they say the more the merrier!!!! lol…neways i hope 2 make alot of freinds here so give me lots of commentses!!!!
-DOOOOOMMMM!!!!!!!!!!!!!!!! <--- me bein random again ^_^ hehe…toodles!!!!!
-
-love and waffles,
-
-t3h PeNgU1N oF d00m."#;
-
-enum MagicNumbers
+#[derive(FromArgs)]
+/// hash visualizer
+struct Args
 {
-    Fnv1aPrime = 16777619,
-    Fnv1aBias  = 2166136261,
+    /// use hilbert curve algorithm instead of linear mapping
+    #[argh(switch, short = 'h')]
+    hilbert: bool,
+    /// use a file instead of a string as the input
+    #[argh(option, short = 'f')]
+    file:    Option<String>,
+    /// string to use as input
+    #[argh(positional, default = "String::from(\"no input given\")")]
+    input:   String,
 }
-// these are of course not really how you wanna do this but its just fine for what i wanted to do...
-fn fnv1a(data: &[u8]) -> Vec<u8>
-{
-    let mut res = Vec::new();
-    let mut out = MagicNumbers::Fnv1aBias as u32;
-    for byte in data
-    {
-        out ^= *byte as u32;
-        out = out.wrapping_mul(MagicNumbers::Fnv1aPrime as u32);
-        res.extend_from_slice(&out.to_le_bytes());
-    }
-    res
-}
-
-fn fnv1(data: &[u8]) -> Vec<u8>
-{
-    let mut res = Vec::new();
-    let mut out = MagicNumbers::Fnv1aBias as u32;
-    for byte in data
-    {
-        out = out.wrapping_mul(MagicNumbers::Fnv1aPrime as u32);
-        out ^= *byte as u32;
-        res.extend_from_slice(&out.to_le_bytes());
-    }
-    res
-}
-
 fn main()
 {
-    let args: Vec<String> = env::args().collect();
-    let mode = args.get(1);
-    let input = args.get(2);
-
-    if mode.is_none()
-        || (mode.is_some() && input.is_none())
-        || mode.is_some_and(|&x| x != "file" && x != "string")
+    let args: Args = argh::from_env();
+    let data = match args.file.is_some()
     {
-        eprintln!("Wrong arguments!\nUsage: bin file|string <filepath|inputtext>");
-        return;
-    }
-
-    let mode = mode.unwrap();
-    let input = input.unwrap();
-    let data = match mode.as_str()
-    {
-        "file" =>
+        true =>
         {
-            let mut file = File::open(input).unwrap();
+            let mut file = File::open(args.file.unwrap()).unwrap();
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer).unwrap();
             buffer
         }
-        "string" => input.to_owned().into_bytes(),
+        false => args.input.into_bytes(),
         _ =>
         {
             panic!("invalid input")
@@ -87,36 +54,61 @@ fn main()
     );
 
     let bits = hash.view_bits::<Msb0>();
-    let dimension = (bits.len() as f64).sqrt() as u32;
+    let size = (bits.len() as f64).sqrt();
 
-    println!("dimension: {} bitcount: {}", dimension, bits.len());
+    let size = match args.hilbert
+    {
+        true => size.ceil(),
+        _ => size.floor(),
+    } as u32;
+    let dimension = match args.hilbert
+    {
+        true => 2u32.pow((size as f32 + 1.).log2().ceil() as u32),
+        _ => size,
+    };
+
+    println!("dimension: {} bitcount: {}", dimension, bits.len(),);
 
     let mut img = RgbImage::new(dimension, dimension);
     let mut coords = (0u32, 0u32);
-
-    for bit in bits
+    let mut counter = 0;
+    for (i, bit) in bits.iter().take((dimension.pow(2)) as _).enumerate()
     {
-        if coords == (dimension - 1, dimension - 1)
+        if !args.hilbert
         {
-            break;
+            if coords == (dimension, dimension)
+            {
+                println!("coords: {:?}, dimension: {:?}", coords, dimension);
+                break;
+            }
+            if coords.0 == dimension
+            {
+                coords.0 = 0;
+                coords.1 = coords.1 + 1;
+            }
         }
-        if coords.0 > dimension - 1
+
+        let pos = match args.hilbert
         {
-            coords.0 = 0;
-            coords.1 = coords.1 + 1;
-        }
+            true => index2xy(dimension, i as _),
+            _ => Coords {
+                x: coords.0,
+                y: coords.1,
+            },
+        };
 
         if *bit == true
         {
-            img.put_pixel(coords.0, coords.1, Rgb([255, 255, 255]));
+            img.put_pixel(pos.x, pos.y, Rgb([255, 255, 255]));
         }
         else
         {
-            img.put_pixel(coords.0, coords.1, Rgb([0, 0, 0]));
+            img.put_pixel(pos.x, pos.y, Rgb([0, 0, 0]));
         }
         coords.0 = coords.0 + 1;
+        counter.add_assign(1);
     }
-
+    println!("written: {} bits of {}", counter, bits.len());
     let _ = img.save("output.png").unwrap();
 }
 
