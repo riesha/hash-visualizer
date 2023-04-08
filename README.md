@@ -19,3 +19,11 @@ Options:
   -f, --file        use a file instead of a string as the input
   --help            display usage information
 ```
+
+## Examples 
+
+hilbert curve
+![](demos/hilbert0.png)
+
+linear mapping
+![](demos/linear0.png)
