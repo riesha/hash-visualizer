@@ -1,6 +1,6 @@
 # hash-visualizer
 
-little toy project of mine i wrote to visualize the randomness of hash functions
+little toy project of mine i wrote to visualize the bit randomness of hash functions
 
 ## Usage
 
