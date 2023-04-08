@@ -1,7 +1,7 @@
 #![feature(hasher_prefixfree_extras)]
 #![feature(is_some_with)]
 #![feature(int_log)]
-use std::{env, fs::File, io::Read, ops::AddAssign};
+use std::{fs::File, io::Read, ops::AddAssign};
 
 use argh::FromArgs;
 use bitvec::{prelude::Msb0, view::BitView};
@@ -22,7 +22,7 @@ struct Args
     /// use a file instead of a string as the input
     #[argh(option, short = 'f')]
     file:    Option<String>,
-    /// string to use as input
+    ///  unused if file flag is specified, string to use as input instead of a file, defaults to "no input given" if left blank
     #[argh(positional, default = "String::from(\"no input given\")")]
     input:   String,
 }
@@ -39,10 +39,6 @@ fn main()
             buffer
         }
         false => args.input.into_bytes(),
-        _ =>
-        {
-            panic!("invalid input")
-        }
     };
 
     let hash = fnv1a(&data);

@@ -10,7 +10,9 @@ Usage: hash-visualizer.exe [<input>] [-h] [-f <file>]
 hash visualizer
 
 Positional Arguments:
-  input             string to use as input
+  input             unused if file flag is specified, string to use as input
+                    instead of a file, defaults to "no input given" if left
+                    blank
 
 Options:
   -h, --hilbert     use hilbert curve algorithm instead of linear mapping
